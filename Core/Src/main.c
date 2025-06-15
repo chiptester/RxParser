@@ -52,11 +52,8 @@ UART_HandleTypeDef huart2;
 uint8_t    rx_buffer[8];
 uint32_t   rx_size;
 uint8_t    rx_packet;
+uint8_t    rx_types[256];
 
-uint8_t    elrs_size;
-uint8_t    elrs_data[64];
-uint8_t    elrs_count;
-uint8_t    elrs_crc8;
 
 
 /* USER CODE END PV */
@@ -145,8 +142,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     		{
     			irq_frame.bytes[rx_received]=CRSF_SYNC_BYTE;
     			irq_frame.syncbyte=irq_frame.bytes[0];
-
-//				rx_frame_bytes[rx_received]=CRSF_SYNC_BYTE;
     			rx_received++;
     		}
     		break;
@@ -155,39 +150,33 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     		{
     			irq_frame.bytes[rx_received]=rx_buffer[0];
     			irq_frame.length=irq_frame.bytes[1];
-
-//    		  rx_frame_size=rx_buffer[0];
-//    		  rx_frame_bytes[rx_received]=rx_frame_size;
-    		  rx_received++;
+    			rx_received++;
     		}
     		break;
     	case 2:
-    		irq_frame.bytes[rx_received]=rx_buffer[0];
-    		irq_frame.type=irq_frame.bytes[2];
-
-//    		rx_frame_type=rx_buffer[0];
-//    		rx_frame_bytes[rx_received]=rx_frame_type;
-    		rx_received++;
+    			irq_frame.bytes[rx_received]=rx_buffer[0];
+    			irq_frame.type=irq_frame.bytes[2];
+    			rx_received++;
     		break;
     	default:
-    		irq_frame.bytes[rx_received]=rx_buffer[0];
-
-//  		rx_frame_bytes[rx_received]=rx_buffer[0];
-    		rx_received++;
-//    		if(rx_received==(rx_frame_size+2))
-    		if(rx_received==(irq_frame.length+2))
-    		{
-//    			rx_frame_crc=rx_buffer[0];
-    			irq_frame.crc8=rx_buffer[0];
-//    			uint8_t frame_crc = crc8(&rx_frame_bytes[2],rx_frame_size-1);
-    			uint8_t frame_crc = crc8(&(irq_frame.bytes[2]),irq_frame.length-1);
-//    			if(frame_crc==rx_frame_crc)
-    			if(frame_crc==irq_frame.crc8)
+    			irq_frame.bytes[rx_received]=rx_buffer[0];
+    			rx_received++;
+    			if(rx_received==(irq_frame.length+2))
     			{
+    				irq_frame.crc8=rx_buffer[0];
+    				memcpy(&rx_frame, &irq_frame, sizeof(crsfFrameDef_t));
     				rx_frame_status=1;
+    				rx_received=0;
+
+/*
+    				uint8_t frame_crc = crc8(&(irq_frame.bytes[2]),irq_frame.length-1);
+    				if(frame_crc==irq_frame.crc8)
+    				{
+    					rx_frame_status=1;
+    				}
+    				rx_received=0;
+*/
     			}
-    			rx_received=0;
-    		}
     	}
     	HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
     }
@@ -228,10 +217,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
   rx_packet=1;
-  elrs_count=0;
-  elrs_size=0;
   int16_t rx_ch1;
-
+  memset(rx_types,0,256);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -242,15 +229,24 @@ int main(void)
 	 if(rx_frame_status==1)
 	 {
 		 rx_frame_status=0;
-		// if(rx_frame_bytes[2]==0x16)
-		 if(irq_frame.type==0x16)
+		 uint8_t frame_crc = crc8(&(rx_frame.bytes[2]),rx_frame.length-1);
+		 if(frame_crc==rx_frame.crc8)
 		 {
-			 memcpy((uint8_t *)&rx_channels, (uint8_t *)&(irq_frame.bytes[3]), 22);
-			 rx_ch1=rx_channels.chan0;
-			 rx_ch1=TICKS_TO_US(rx_ch1);
-
-			 debug_printf("%d %d  \n\r", rx_channels.chan0, rx_ch1 );
+			 if(rx_frame.type==0x16)
+			 {
+				 memcpy((uint8_t *)&rx_channels, (uint8_t *)&(rx_frame.bytes[3]), 22);
+				 rx_ch1=rx_channels.chan0;
+				 rx_ch1=TICKS_TO_US(rx_ch1);
+				 debug_printf("CH1=%d %d  \n\r", rx_channels.chan0, rx_ch1 );
+			 }
+			 else
+			 {
+			   rx_types[rx_frame.type]++;
+			   debug_printf("FT=%X - %d\n\r", rx_frame.type, rx_types[rx_frame.type] );
+			 }
 		 }
+		 else
+			 debug_printf("Frame = %d CRC Error\n\r", rx_frame.type );
 
 	 }
     /* USER CODE END WHILE */
