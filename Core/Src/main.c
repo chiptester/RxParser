@@ -54,7 +54,9 @@ uint32_t   rx_size;
 uint8_t    rx_packet;
 uint8_t    rx_types[256];
 
-
+uint8_t  terminal_str[256];
+uint8_t  terminal_cnt;
+uint8_t  terminal_char;
 
 /* USER CODE END PV */
 
@@ -119,67 +121,85 @@ uint8_t crc8(const uint8_t * ptr, uint8_t len)
 crsfPayloadRcChannelsPacked_t rx_channels;
 crsfLinkStatistics_t rx_statistics;
 
-crsfFrameDef_t irq_frame;
 crsfFrameDef_t rx_frame;
-
-volatile uint8_t rx_received=0;
-volatile uint8_t rx_frame_bytes[CRSF_FRAME_SIZE_MAX];
-volatile uint8_t rx_frame_size=0;
-volatile uint8_t rx_frame_type=0;
-volatile uint8_t rx_frame_crc=0;
 volatile uint8_t rx_frame_status=0;
+
+crsfFrameDef_t irq_frame;
+volatile uint8_t irq_received=0;
+
 
 
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-
-	if (huart->Instance == USART2) {
-
-    	switch(rx_received)
+	if (huart->Instance == USART1)
+	{
+		if (huart == &huart1)
+		{
+			terminal_cnt++;
+			HAL_UART_Transmit_IT(&huart1, &terminal_char, 1);
+			HAL_UART_Receive_IT(&huart1, &terminal_char, 1);
+		}
+	}
+	//================================================================
+	if (huart->Instance == USART2)
+	{
+    	switch(irq_received)
     	{
     	case 0:
     		if(rx_buffer[0]== CRSF_SYNC_BYTE)
     		{
-    			irq_frame.bytes[rx_received]=CRSF_SYNC_BYTE;
+    			irq_frame.bytes[irq_received]=CRSF_SYNC_BYTE;
     			irq_frame.syncbyte=irq_frame.bytes[0];
-    			rx_received++;
+    			irq_received++;
     		}
     		break;
     	case 1:
     		if(rx_buffer[0]<=CRSF_FRAME_SIZE_MAX)
     		{
-    			irq_frame.bytes[rx_received]=rx_buffer[0];
+    			irq_frame.bytes[irq_received]=rx_buffer[0];
     			irq_frame.length=irq_frame.bytes[1];
-    			rx_received++;
+    			irq_received++;
     		}
     		break;
     	case 2:
-    			irq_frame.bytes[rx_received]=rx_buffer[0];
+    			irq_frame.bytes[irq_received]=rx_buffer[0];
     			irq_frame.type=irq_frame.bytes[2];
-    			rx_received++;
+    			irq_received++;
     		break;
     	default:
-    			irq_frame.bytes[rx_received]=rx_buffer[0];
-    			rx_received++;
-    			if(rx_received==(irq_frame.length+2))
+    			irq_frame.bytes[irq_received]=rx_buffer[0];
+    			irq_received++;
+    			if(irq_received==(irq_frame.length+2))
     			{
     				irq_frame.crc8=rx_buffer[0];
     				memcpy(&rx_frame, &irq_frame, sizeof(crsfFrameDef_t));
     				rx_frame_status=1;
-    				rx_received=0;
+    				irq_received=0;
 
-/*
-    				uint8_t frame_crc = crc8(&(irq_frame.bytes[2]),irq_frame.length-1);
-    				if(frame_crc==irq_frame.crc8)
-    				{
-    					rx_frame_status=1;
-    				}
-    				rx_received=0;
-*/
     			}
     	}
     	HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
     }
+}
+
+void print_channels()
+{
+	debug_printf("CH00=%d \n\r", rx_channels.chan0 );
+	debug_printf("CH01=%d \n\r", rx_channels.chan1 );
+	debug_printf("CH02=%d \n\r", rx_channels.chan2 );
+	debug_printf("CH03=%d \n\r", rx_channels.chan3 );
+	debug_printf("CH04=%d \n\r", rx_channels.chan4 );
+	debug_printf("CH05=%d \n\r", rx_channels.chan5 );
+	debug_printf("CH06=%d \n\r", rx_channels.chan6 );
+	debug_printf("CH07=%d \n\r", rx_channels.chan7 );
+	debug_printf("CH08=%d \n\r", rx_channels.chan8 );
+	debug_printf("CH09=%d \n\r", rx_channels.chan9 );
+	debug_printf("CH10=%d \n\r", rx_channels.chan10 );
+	debug_printf("CH11=%d \n\r", rx_channels.chan11 );
+	debug_printf("CH12=%d \n\r", rx_channels.chan12 );
+	debug_printf("CH13=%d \n\r", rx_channels.chan13 );
+	debug_printf("CH14=%d \n\r", rx_channels.chan14 );
+	debug_printf("CH15=%d \n\r", rx_channels.chan15 );
 }
 /* USER CODE END 0 */
 
@@ -226,6 +246,23 @@ int main(void)
   HAL_Delay(2000);
   while (1)
   {
+	  //===========================================================================
+      if(terminal_cnt>0)
+      {
+    	  switch(terminal_char)
+    	  {
+    	  	  case 'w' : debug_printf("Move up\n\r"); break;
+    	  	  case 's' : debug_printf("Move down\n\r"); break;
+    	  	  case 'a' : debug_printf("Move left\n\r"); break;
+    	  	  case 'd' : debug_printf("Move right\n\r"); break;
+    	  	  case 'i' : debug_printf("Show info\n\r"); break;
+    	  	  case 'z' : debug_printf("Move to zero\n\r"); break;
+    	      case '0' : debug_printf("Store as zero\n\r"); break;
+    	      case 'c' : print_channels(); break;
+    	  }
+    	  terminal_cnt--;
+      }
+      //===========================================================================
 	 if(rx_frame_status==1)
 	 {
 		 rx_frame_status=0;
@@ -237,16 +274,18 @@ int main(void)
 				 memcpy((uint8_t *)&rx_channels, (uint8_t *)&(rx_frame.bytes[3]), 22);
 				 rx_ch1=rx_channels.chan0;
 				 rx_ch1=TICKS_TO_US(rx_ch1);
-				 debug_printf("CH1=%d %d  \n\r", rx_channels.chan0, rx_ch1 );
+				// debug_printf("CH1=%d %d  \n\r", rx_channels.chan0, rx_ch1 );
 			 }
 			 else
 			 {
 			   rx_types[rx_frame.type]++;
-			   debug_printf("FT=%X - %d\n\r", rx_frame.type, rx_types[rx_frame.type] );
+			   //debug_printf("FT=%X - %d\n\r", rx_frame.type, rx_types[rx_frame.type] );
 			 }
 		 }
 		 else
-			 debug_printf("Frame = %d CRC Error\n\r", rx_frame.type );
+		 {
+			 //debug_printf("Frame = %d CRC Error\n\r", rx_frame.type );
+		 }
 
 	 }
     /* USER CODE END WHILE */
