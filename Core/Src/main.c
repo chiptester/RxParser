@@ -201,6 +201,14 @@ void print_channels()
 	debug_printf("CH14=%d \n\r", rx_channels.chan14 );
 	debug_printf("CH15=%d \n\r", rx_channels.chan15 );
 }
+
+void print_frames()
+{
+	for(uint8_t f=0; f<255; f++)
+	 if(rx_types[f]!=0)
+		 debug_printf("FT=%X %d \n\r", f, rx_types[f] );
+
+}
 /* USER CODE END 0 */
 
 /**
@@ -235,6 +243,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_UART_Receive_IT(&huart1, &terminal_char, 1);
   HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
   rx_packet=1;
   int16_t rx_ch1;
@@ -247,7 +256,9 @@ int main(void)
   while (1)
   {
 	  //===========================================================================
-      if(terminal_cnt>0)
+
+	  //===========================================================================
+	  if(terminal_cnt>0)
       {
     	  switch(terminal_char)
     	  {
@@ -259,6 +270,7 @@ int main(void)
     	  	  case 'z' : debug_printf("Move to zero\n\r"); break;
     	      case '0' : debug_printf("Store as zero\n\r"); break;
     	      case 'c' : print_channels(); break;
+    	      case 'f' : print_frames(); break;
     	  }
     	  terminal_cnt--;
       }
@@ -278,7 +290,7 @@ int main(void)
 			 }
 			 else
 			 {
-			   rx_types[rx_frame.type]++;
+				 rx_types[rx_frame.type]++;
 			   //debug_printf("FT=%X - %d\n\r", rx_frame.type, rx_types[rx_frame.type] );
 			 }
 		 }
