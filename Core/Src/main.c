@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include "st7735.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +46,8 @@ typedef struct
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
@@ -65,6 +68,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 void debug_printf(char *format, ...)
 {
@@ -242,7 +246,11 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
+  ST7735_Init();
+
+
   HAL_UART_Receive_IT(&huart1, &terminal_char, 1);
   HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
   rx_packet=1;
@@ -252,11 +260,39 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  ST7735_Init();
+
+  // Check border
+  ST7735_FillScreen(ST7735_BLACK);
+  ST7735_WriteString(0,  0, "X: ", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+  ST7735_WriteString(0, 18, "Y: ", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+
+  ST7735_WriteString(0, 18*2+5, "Move to 0", Font_11x18, ST7735_GREEN, ST7735_BLACK);
+  ST7735_WriteString(0, 18*3+5, "Select ...", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+  ST7735_WriteString(0, 18*4+5, "Save ...", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+
+  ST7735_WriteString(0, 18*6+5, "Setup ...", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+
+
   HAL_Delay(2000);
+
+  uint32_t time_now = HAL_GetTick();
+  uint32_t time_last= time_now;
   while (1)
   {
 	  //===========================================================================
+	  time_now = HAL_GetTick();
+	  if( (time_now-time_last)> 500 )
+	  {
+		  char msg[32];
+		  sprintf(msg,"X: %ld", time_last);
+		  ST7735_WriteString(0,  0, msg, Font_11x18, ST7735_WHITE, ST7735_BLACK);
 
+		  sprintf(msg,"Y: %ld", time_now);
+		  ST7735_WriteString(0, 18, msg, Font_11x18, ST7735_WHITE, ST7735_BLACK);
+
+		  time_last= HAL_GetTick();
+	  }
 	  //===========================================================================
 	  if(terminal_cnt>0)
       {
@@ -353,6 +389,44 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -425,6 +499,7 @@ static void MX_USART2_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
@@ -433,6 +508,17 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, LED_CS_Pin|LED_RESET_Pin|LED_DC_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : LED_CS_Pin LED_RESET_Pin LED_DC_Pin */
+  GPIO_InitStruct.Pin = LED_CS_Pin|LED_RESET_Pin|LED_DC_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
